@@ -1,0 +1,181 @@
+substitutions: 
+  $roomname: loznice
+  
+esphome:
+  name: indoormeteo
+  includes:
+    - "custom/veml7700_custom_sensor.h"
+    - "custom/mics6814_pimoroni_sensor.h"
+  libraries:
+    - Wire
+    - SPI
+    - AdaFruit/Adafruit BusIO @ 1.10.1
+    - AdaFruit VEML7700=https://github.com/adafruit/Adafruit_VEML7700
+    - adafruit/Adafruit NeoPixel
+    - ColorConverter=https://github.com/luisllamasbinaburo/Arduino-ColorConverter
+    - IOExpander=https://github.com/ZodiusInfuser/IOExpander_Library
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "NkbTjm5W30FWOtqokJqJyBysmcXRwzHuIGUKUPuDiMY="
+
+ota:
+  password: "39cea093b3d318ee28115854c280aa00"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Indoormeteo Fallback Hotspot"
+    password: "yUIOGL3zzboz"
+
+captive_portal:
+
+
+i2c:
+  sda: 21
+  scl: 22
+  scan: true
+  id: i2cbus
+
+#[14:15:14][I][i2c.arduino:054]: Results from i2c bus scan:
+#[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x10 veml7700
+#[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x19 ioexpander- mics6814
+#[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x62 scd41
+#[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x68 mpu6050
+#[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x69 sps30
+#[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x77 bmp388 
+
+
+sensor:
+# https://esphome.io/components/sensor/scd4x.html  
+  - platform: scd4x
+    i2c_id: i2cbus
+    address: 0x62
+    update_interval: 10s
+    co2:
+      name: "${roomname} CO2"
+      id: "${roomname}_SCD41_CO2"
+    temperature:
+      name: "${roomname} Temperature"
+      id: "${roomname}_SCD41_TEMPERATURE"
+    humidity:
+      name: "${roomname} Humidity"
+      id: "${roomname}_SCD41_HUMIDITY"      
+
+# https://esphome.io/components/sensor/mpu6050.html  
+  - platform: mpu6050
+    i2c_id: i2cbus
+    address: 0x68
+    accel_x:
+      name: "${roomname} MPU6050 Accel X"
+      id: "${roomname}_accel_x"
+    accel_y:
+      name: "${roomname} MPU6050 Accel Y"
+      id: "${roomname}_accel_y"
+    accel_z:
+      name: "${roomname} MPU6050 Accel z"
+      id: "${roomname}_accel_z"
+    gyro_x:
+      name: "${roomname} MPU6050 Gyro X"
+      id: "${roomname}_gyro_x"
+    gyro_y:
+      name: "${roomname} MPU6050 Gyro Y"
+      id: "${roomname}_gyro_y"
+    gyro_z:
+      name: "${roomname} MPU6050 Gyro z"
+      id: "${roomname}_gyro_z"
+    temperature:
+      name: "${roomname} MPU6050 Temperature"
+      id: "${roomname}_gyro_temperature"
+
+# https://esphome.io/components/sensor/sps30.html
+  - platform: sps30
+    i2c_id: i2cbus
+    address: 0x69
+    update_interval: 10s
+    pm_1_0:
+      name: "${roomname} PM <1µm Weight concentration"
+      id: "${roomname}_PM_1_0"
+    pm_2_5:
+      name: "${roomname} PM <2.5µm Weight concentration"
+      id: "${roomname}_PM_2_5"
+    pm_4_0:
+      name: "${roomname} PM <4µm Weight concentration"
+      id: "${roomname}_PM_4_0"
+    pm_10_0:
+      name: "${roomname} PM <10µm Weight concentration"
+      id: "${roomname}_PM_10_0"
+    pmc_0_5:
+      name: "${roomname} PM <0.5µm Number concentration"
+      id: "${roomname}_PMC_0_5"
+    pmc_1_0:
+      name: "${roomname} PM <1µm Number concentration"
+      id: "${roomname}_PMC_1_0"
+    pmc_2_5:
+      name: "${roomname} PM <2.5µm Number concentration"
+      id: "${roomname}_PMC_2_5"
+    pmc_4_0:
+      name: "${roomname} PM <4µm Number concentration"
+      id: "${roomname}_PMC_4_0"
+    pmc_10_0:
+      name: "${roomname} PM <10µm Number concentration"
+      id: "${roomname}_PMC_10_0"
+    pm_size:
+      name: "Typical Particle size"
+      id: "pm_size"
+
+# https://esphome.io/components/sensor/mpu6050.html
+  - platform: bmp3xx
+    i2c_id: i2cbus
+    address: 0x77
+    update_interval: 10s
+    temperature:
+      name: "${roomname}BMP388 Temperature"
+      id: "${roomname}_bmp388_temperature"
+      oversampling: 16x
+    pressure:
+      name: "${roomname}BMP388 Pressure"
+      id: "${roomname}_bmp388_pressure"
+
+#https://github.com/jhagedorn08/esphome-config/blob/main/lux.yaml
+  - platform: custom
+    lambda: |-
+      auto veml7700 = new VEML7700CustomSensor();
+      App.register_component(veml7700);
+      return {veml7700, veml7700->lux_sensor, veml7700->white_sensor, veml7700->als_sensor};
+    sensors:
+    - name: "VEML7700 Light" # Required dummy sensor
+    - name: "${roomname} VEML770 Lux"
+      id: "${roomname}_veml7700_lux"
+      accuracy_decimals: 1
+      unit_of_measurement: Lux
+    - name: "${roomname} VEML770 White"
+      id: "${roomname}_veml7700_white"
+#      unit_of_measurement: Lux
+      accuracy_decimals: 0
+    - name: "${roomname} VEML770 ALS"
+      id: "${roomname}_veml7700_als"
+#      unit_of_measurement: Lux
+      accuracy_decimals: 0
+
+  - platform: custom
+    lambda: |-
+      auto mics6814 = new MICS6814CustomSensor();
+      App.register_component(mics6814);
+      return {mics6814->red_sensor, mics6814->nh3_sensor, mics6814->oxd_sensor};
+    sensors:
+    - name: "${roomname} MICS6814 Reducting gas"
+    - name: "${roomname} MICS6814 NH3 gas"
+    - name: "${roomname} MICS6814 Oxidizing gas"
