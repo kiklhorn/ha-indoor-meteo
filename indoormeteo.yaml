@@ -6,14 +6,32 @@ esphome:
   includes:
     - "custom/veml7700_custom_sensor.h"
     - "custom/mics6814_pimoroni_sensor.h"
+    - "custom/display_controller.h"
+    # - "custom/ScioSense_ENS160.h"
+    # - "custom/ens160_sensor.h"
+    - "custom/ens160"
   libraries:
     - Wire
     - SPI
+    - FS
     - AdaFruit/Adafruit BusIO @ 1.10.1
     - AdaFruit VEML7700=https://github.com/adafruit/Adafruit_VEML7700
     - adafruit/Adafruit NeoPixel
     - ColorConverter=https://github.com/luisllamasbinaburo/Arduino-ColorConverter
     - IOExpander=https://github.com/ZodiusInfuser/IOExpander_Library
+    # - TFT_eSPI
+    - SPIFFS
+    - "file:////config/esphome/custom/libs/TFT_eSPI"
+    
+
+external_components:  # https://esphome.io/components/external_components.html
+  # use rtttl and dfplayer from ESPHome's dev branch in GitHub
+  - source:
+      type: git
+      url: https://github.com/kiklhorn/esphome
+      ref: dev
+    components: [ st7789 ]
+    refresh: 1min #Comment this after get working on github to default this option back to 1 day
 
 esp32:
   board: esp32dev
@@ -22,7 +40,7 @@ esp32:
 
 # Enable logging
 logger:
-
+  level: debug
 # Enable Home Assistant API
 api:
   encryption:
@@ -52,10 +70,18 @@ i2c:
 #[14:15:14][I][i2c.arduino:054]: Results from i2c bus scan:
 #[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x10 veml7700
 #[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x19 ioexpander- mics6814
+#[22:45:57][I][i2c.arduino:060]: Found i2c device at address 0x38 AHT21
+#[22:45:57][I][i2c.arduino:060]: Found i2c device at address 0x53 ENS160
 #[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x62 scd41
 #[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x68 mpu6050
 #[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x69 sps30
 #[14:15:14][I][i2c.arduino:060]: Found i2c device at address 0x77 bmp388 
+#SPI: DISPLAY
+#GPIO34 - ADC FOTOTRANZISTOR, +GPIO4 NUTNO NASTAVIT HIGH IMPEDANCE
+#GPIO32 - ADC SENZOR HLUKU
+#GPIO25 - 3X RGB LED
+#GPIO12 - PŮVODNĚ FAN, BUDE PIEZO
+
 
 
 sensor:
@@ -72,7 +98,8 @@ sensor:
       id: "${roomname}_SCD41_TEMPERATURE"
     humidity:
       name: "${roomname} Humidity"
-      id: "${roomname}_SCD41_HUMIDITY"      
+      id: "${roomname}_SCD41_HUMIDITY"
+      device_class: humidity
 
 # https://esphome.io/components/sensor/mpu6050.html  
   - platform: mpu6050
@@ -133,8 +160,8 @@ sensor:
       name: "${roomname} PM <10µm Number concentration"
       id: "${roomname}_PMC_10_0"
     pm_size:
-      name: "Typical Particle size"
-      id: "pm_size"
+      name: "${roomname} Typical Particle size"
+      id: "${roomname}_pm_size"
 
 # https://esphome.io/components/sensor/mpu6050.html
   - platform: bmp3xx
@@ -142,12 +169,17 @@ sensor:
     address: 0x77
     update_interval: 10s
     temperature:
-      name: "${roomname}BMP388 Temperature"
+      name: "${roomname} BMP388 Temperature"
       id: "${roomname}_bmp388_temperature"
       oversampling: 16x
+      device_class: temperature
+      unit_of_measurement: "°C"
     pressure:
-      name: "${roomname}BMP388 Pressure"
+      name: "${roomname} BMP388 Pressure"
       id: "${roomname}_bmp388_pressure"
+      device_class: pressure
+      unit_of_measurement: "hPa"
+      
 
 #https://github.com/jhagedorn08/esphome-config/blob/main/lux.yaml
   - platform: custom
@@ -156,7 +188,9 @@ sensor:
       App.register_component(veml7700);
       return {veml7700, veml7700->lux_sensor, veml7700->white_sensor, veml7700->als_sensor};
     sensors:
-    - name: "VEML7700 Light" # Required dummy sensor
+    - name: "${roomname} dummy VEML7700" # Required dummy sensor
+      id: "${roomname}_dummy7700"
+      internal: true #is dummy... (or repair custom sensor component)
     - name: "${roomname} VEML770 Lux"
       id: "${roomname}_veml7700_lux"
       accuracy_decimals: 1
@@ -179,3 +213,222 @@ sensor:
     - name: "${roomname} MICS6814 Reducting gas"
     - name: "${roomname} MICS6814 NH3 gas"
     - name: "${roomname} MICS6814 Oxidizing gas"
+
+  - platform: custom
+    lambda: |-
+      auto ens160 = new ENS160Sensor();
+      App.register_component(ens160);
+      return {ens160->AQI_sensor, ens160->TVOC_sensor, ens160->eCO2_sensor};
+    sensors:
+    - name: "${roomname} ENS160 AQI"
+    - name: "${roomname} ENS160 TVOC"
+    - name: "${roomname} ENS160 eCO2"
+
+
+  - platform: adc
+    pin: GPIO34
+      # number: GPIO34
+      # inverted: false
+      # mode:
+      #     input: true
+      #     pullup: false
+    name: "${roomname} fototranzistor"
+    id: "${roomname}_fototranzistor"
+    raw: true
+    update_interval: 10s
+    filters:
+      - lambda: return 4095-x;
+
+  - platform: adc
+    pin: GPIO32
+    name: "${roomname} loudness"
+    id: "${roomname}_loudness"
+    raw: true
+    update_interval: 1s
+    filters:
+      - sliding_window_moving_average:
+          window_size: 15
+          send_every: 15
+      - lambda: return 4095-x;
+      
+  - platform: aht10
+    temperature:
+      name: "${roomname} AHT10 Temperature"
+      id: "${roomname}_AHT10_TEMPERATURE"
+    humidity:
+      name: "${roomname} AHT10 Humidity"
+      id: "${roomname}_AHT10_Humidity"
+    update_interval: 10s   
+
+
+    
+light:
+  - platform: neopixelbus
+    type: GRB
+    variant: WS2812X
+    pin: GPIO25
+    num_leds: 3
+    name: "${roomname} Front LEDs"
+    id: ${roomname}_frontleds
+    internal: true
+#define PM_LED 1
+#define TEMP_LED 2
+#define CO2_LED 3
+  - platform: partition
+    name: "${roomname} PM LED"
+    id: ${roomname}_PM_LED
+    segments:
+      - id: ${roomname}_frontleds
+        from: 0
+        to: 0
+  - platform: partition
+    name: "${roomname} TEMPERATURE LED"
+    id: ${roomname}_TEMP_LED
+    segments:
+      - id: ${roomname}_frontleds
+        from: 1
+        to: 1
+  - platform: partition
+    name: "${roomname} CO2 LED"
+    id: ${roomname}_CO2_LED
+    segments:
+      - id: ${roomname}_frontleds
+        from: 2
+        to: 2
+        
+
+# static const byte MICS6814_LED_R = 3;
+# static const byte MICS6814_LED_G = 7;
+# static const byte MICS6814_LED_B = 2;
+# static constexpr float BRIGHTNESSmics = 0.5f; 
+# static constexpr unsigned int PERIOD = (unsigned int)(255.0f / BRIGHTNESSmics);  
+# static const bool INVERT_OUTPUT = true; //true for common cathode, false for common anode
+    
+color:
+  - id: my_red
+    red: 100%
+    green: 0%
+    blue: 0%
+  - id: my_yellow
+    red: 100%
+    green: 100%
+    blue: 0%
+  - id: my_green
+    red: 0%
+    green: 100%
+    blue: 0%
+  - id: my_blue
+    red: 0%
+    green: 0%
+    blue: 100%
+  - id: my_gray
+    red: 50%
+    green: 50%
+    blue: 50%
+
+font:
+  - file: "fonts/Helvetica.ttf"
+    id: helvetica_48
+    size: 48
+  - file: "fonts/Helvetica.ttf"
+    id: helvetica_24
+    size: 24
+  - file: "fonts/Helvetica.ttf"
+    id: helvetica_12
+    size: 12
+
+# binary_sensor:
+#   - platform: status
+#     name: "Node Status"
+#     id: system_status
+#   - platform: gpio
+#     pin:
+#       number: GPIO0
+#       inverted: true
+#       mode:
+#         input: true
+#         pullup: true
+#     name: "T-Display Button Input 0"
+#     id: tdisplay_button_input_0
+#   - platform: gpio
+#     pin:
+#       number: GPIO35
+#       inverted: true
+#     name: "T-Display Button Input 1"
+#     id: tdisplay_button_input_1
+
+
+
+# # We can still control the backlight independently
+# switch:
+#   - platform: gpio
+#     pin: GPIO4
+#     name: "Backlight"
+#     id: backlight
+
+# image:
+#   - file: "images/image.jpg"
+#     id: my_image
+#     resize: 200x200
+#     type: RGB24
+
+time:
+  - platform: homeassistant
+    id: esptime
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+
+display:
+  - platform: st7789
+    model: TFT_1.3R
+#    backlight_pin: 39 #//GPIO4
+    cs_pin: GPIO14
+    dc_pin: GPIO19
+    reset_pin: GPIO5
+    rotation: 270
+    lambda: |-
+      it.rectangle(0,  0, it.get_width(), it.get_height(), id(my_blue));
+      it.rectangle(0, 20, it.get_width(), it.get_height(), id(my_blue));   // header bar
+
+      it.strftime((240 / 2), (140 / 3) * 1 + 5, id(helvetica_24), id(my_gray), TextAlign::CENTER, "%Y-%m-%d", id(esptime).now());
+      it.strftime((240 / 2), (140 / 3) * 2 + 5, id(helvetica_48), id(my_gray), TextAlign::CENTER, "%H:%M:%S", id(esptime).now());
+      it.print(5, 5, id(helvetica_12), id(my_yellow), TextAlign::TOP_LEFT, "ESPHome");
+
+      // Comment out the above lines to see the image without text overlaid
+      // it.image(0, 0, id(my_image));
+
+      // if (id(system_status).state) {
+         it.print(235, 5, id(helvetica_12), id(my_green), TextAlign::TOP_RIGHT, "Online");
+      // }
+      // else {
+      //   it.print(235, 5, id(helvetica_12), id(my_red), TextAlign::TOP_RIGHT, "Offline");
+      // }
+
+custom_component:
+    lambda: |-
+      displayController = new DisplayController();
+      App.register_component(displayController);
+      // displayController->PrintOnScreen();
+      return {displayController};
+#       // displayController->fillScreen(0x7FE0);
+#       displayController->PrintOnScreen();
+
+
+# display:
+#   - platform: st7735
+#     row_start: 0
+#     device_width: 128
+#     col_start: 0
+#     device_height: 160
+#     model: initr_18blacktab
+#     rotation: 0
+#     eight_bit_color: true
+#     # backlight_pin: GPIO4
+#     cs_pin: GPIO14 #nevyuzity, dummy, zadratovano
+#     dc_pin: GPIO19
+#     reset_pin: GPIO5
+#     lambda: |-
+#       it.filled_rectangle(0, 0, it.get_width(), it.get_height(), id(my_red));
+# #      it.print(0, 0, id(helvetica_48), "Hello World!");
