@@ -38,6 +38,7 @@ static const bool INVERT_OUTPUT = true; //true for common cathode, false for com
 
 /***** Global Variables *****/
 IOExpander ioe(Wire, 0x19);
+bool IOEinitialized = false; //LEDs usability flag set by success expander init
 
 class MICS6814CustomSensor : public PollingComponent {
     public:
@@ -59,8 +60,10 @@ class MICS6814CustomSensor : public PollingComponent {
     {
     while(true)
         delay(1000);
-        Serial.println("Not Initialised");
+        Serial.println("MICS6814 ioe Not Initialised");
     }
+    
+    IOEinitialized = true;
 
     ioe.setMode(MICS6814_VREF, IOExpander::PIN_ADC);
     ioe.setMode(MICS6814_RED, IOExpander::PIN_ADC);
@@ -81,13 +84,14 @@ class MICS6814CustomSensor : public PollingComponent {
 
     void update() override {
 
-    float h = fmodf(((float)millis() * 360.0f) / 10000.0f, 360.0f);
-    byte r, g, b;
-    ColorConverter::HsvToRgb(h, 100.0f, 100.0f, r, g, b);
+    // float h = fmodf(((float)millis() * 360.0f) / 10000.0f, 360.0f);
+    // byte r, g, b;
+    // ColorConverter::HsvToRgb(h, 100.0f, 100.0f, r, g, b);
     
-    ioe.output(MICS6814_LED_R, r);
-    ioe.output(MICS6814_LED_G, g);
-    ioe.output(MICS6814_LED_B, b);
+    // ioe.output(MICS6814_LED_R, r);
+    // ioe.output(MICS6814_LED_G, g);
+    // ioe.output(MICS6814_LED_B, b);
+
 
     float ref = ioe.inputAsVoltage(MICS6814_VREF);
     float red = ioe.inputAsVoltage(MICS6814_RED);
@@ -106,4 +110,40 @@ class MICS6814CustomSensor : public PollingComponent {
     ESP_LOGD("MICS6814", "The value of sensor nh3 is: %.0f", nh3);
     ESP_LOGD("MICS6814", "The value of sensor oxd is: %.0f", oxd);
     }
+};
+
+class MICS6814CustomLightOutput : public Component, public LightOutput {
+ public:
+  void setup() override {
+    // This will be called by App.setup()
+    // pinMode(5, INPUT);
+  }
+  LightTraits get_traits() override {
+    // return the traits this light supports
+    auto traits = LightTraits();
+    traits.set_supported_color_modes({ColorMode::RGB, ColorMode::BRIGHTNESS});
+    return traits;
+  }
+
+  void write_state(LightState *state) override {
+    // This will be called by the light to get a new state to be written.
+    float red, green, blue;
+    // use any of the provided current_values methods
+    state->current_values_as_rgb(&red, &green, &blue);
+    if (IOEinitialized) {
+            // Convert to 0-255
+        int redValue, greenValue, blueValue;
+        redValue = floor(red * 255);
+        greenValue = floor(green * 255);
+        blueValue = floor(blue * 255);
+        ioe.output(MICS6814_LED_R, redValue);
+        ioe.output(MICS6814_LED_G, greenValue);
+        ioe.output(MICS6814_LED_B, blueValue);
+        // ioe.output(MICS6814_LED_R, 255);
+        // Write red, green and blue to HW
+        // ...
+    } else {
+        ESP_LOGD("MICS6814", "MICS6814CustomSensor IOexpander uninitialized, can't write LED");
+    }
+  }
 };
