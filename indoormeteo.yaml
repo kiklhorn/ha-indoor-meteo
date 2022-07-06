@@ -38,6 +38,9 @@ esp32:
   framework:
     type: arduino
 
+
+
+
 # Enable logging
 logger:
   level: debug
@@ -45,6 +48,13 @@ logger:
 api:
   encryption:
     key: "NkbTjm5W30FWOtqokJqJyBysmcXRwzHuIGUKUPuDiMY="
+  services:
+    - service: play_rtttl
+      variables:
+        song_str: string
+      then:
+        - rtttl.play:
+            rtttl: !lambda 'return song_str;'
 
 ota:
   password: "39cea093b3d318ee28115854c280aa00"
@@ -296,6 +306,14 @@ light:
         from: 2
         to: 2
         
+  - platform: custom
+    lambda: |-
+      auto light_out = new MICS6814CustomLightOutput();
+      App.register_component(light_out);
+      return {light_out};
+      
+    lights:
+      - name: "My MICS6814 Custom Light"
 
 # static const byte MICS6814_LED_R = 3;
 # static const byte MICS6814_LED_G = 7;
@@ -415,6 +433,13 @@ custom_component:
 #       // displayController->fillScreen(0x7FE0);
 #       displayController->PrintOnScreen();
 
+output:
+  - platform: ledc
+    pin: GPIO12
+    id: rtttl_out
+
+rtttl:
+  output: rtttl_out
 
 # display:
 #   - platform: st7735
