@@ -43,7 +43,8 @@ esp32:
 
 # Enable logging
 logger:
-  level: debug
+  # level: debug
+  level: warning
 # Enable Home Assistant API
 api:
   encryption:
@@ -101,13 +102,13 @@ sensor:
     address: 0x62
     update_interval: 10s
     co2:
-      name: "${roomname} CO2"
+      name: "${roomname} SCD41 CO2"
       id: "${roomname}_SCD41_CO2"
     temperature:
-      name: "${roomname} Temperature"
+      name: "${roomname} SCD41 Temperature"
       id: "${roomname}_SCD41_TEMPERATURE"
     humidity:
-      name: "${roomname} Humidity"
+      name: "${roomname} SCD41 Humidity"
       id: "${roomname}_SCD41_HUMIDITY"
       device_class: humidity
 
@@ -172,6 +173,7 @@ sensor:
     pm_size:
       name: "${roomname} Typical Particle size"
       id: "${roomname}_pm_size"
+      accuracy_decimals: 2
 
 # https://esphome.io/components/sensor/mpu6050.html
   - platform: bmp3xx
@@ -233,6 +235,7 @@ sensor:
     - name: "${roomname} ENS160 AQI"
     - name: "${roomname} ENS160 TVOC"
     - name: "${roomname} ENS160 eCO2"
+      unit_of_measurement: ppm
 
 
   - platform: adc
@@ -248,6 +251,7 @@ sensor:
     update_interval: 10s
     filters:
       - lambda: return 4095-x;
+    unit_of_measurement: ""
 
   - platform: adc
     pin: GPIO32
@@ -260,7 +264,8 @@ sensor:
           window_size: 15
           send_every: 15
       - lambda: return 4095-x;
-      
+    unit_of_measurement: ""
+
   - platform: aht10
     temperature:
       name: "${roomname} AHT10 Temperature"
@@ -313,7 +318,8 @@ light:
       return {light_out};
       
     lights:
-      - name: "My MICS6814 Custom Light"
+      - name: "${roomname} MICS6814 RGB"
+        id: "${roomname}_MICS6814_RGB"
 
 # static const byte MICS6814_LED_R = 3;
 # static const byte MICS6814_LED_G = 7;
